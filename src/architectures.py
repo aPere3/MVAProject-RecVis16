@@ -3,9 +3,6 @@
 
 """
 This module contains ready to train architectures using standard training and stabilized ones.
-
-Author: Alexandre Péré
-
 """
 
 from network import BaseNetwork
@@ -66,7 +63,7 @@ class MnistNetwork(BaseNetwork):
 
             # Define Loss # ============================================================================================
             with tf.name_scope('Loss') as scope:
-                cross_entropy = tf.reduce_mean(-tf.reduce_sum(self._net_label * tf.log(self._net_output), 
+                cross_entropy = tf.reduce_mean(-tf.reduce_sum(self._net_label * tf.log(self._net_output+ 1e-10), 
                                                reduction_indices=[1]), name='CrossEntropy')
                 weights = tf.trainable_variables()
                 weights_decay = tf.add_n([tf.nn.l2_loss(v) for v in weights]) * 0.001
@@ -165,7 +162,7 @@ class CifarNet(BaseNetwork):
 
             # Define Loss # ============================================================================================
             with tf.name_scope('Loss') as scope:
-                cross_entropy = tf.reduce_mean(-tf.reduce_sum(self._net_label * tf.log(self._net_output), 
+                cross_entropy = tf.reduce_mean(-tf.reduce_sum(self._net_label * tf.log(self._net_output+ 1e-10), 
                                                reduction_indices=[1]), name='CrossEntropy')
                 weights = tf.trainable_variables()
                 weights_decay = tf.scalar_mul(beta,tf.add_n([tf.nn.l2_loss(v) for v in weights]))
@@ -213,6 +210,8 @@ class StabilizedCifarNet(BaseNetwork):
             beta = tf.placeholder(tf.float32, shape=[], name='Beta')
             learning_rate = tf.placeholder(tf.float32, shape=[], name='LearningRate')
             tf.summary.scalar('LearningRate', learning_rate)
+            tf.summary.scalar('Alpha', alpha)
+            tf.summary.scalar('Stdv', stdv)
                         
             # Define Network # =========================================================================================
             # Input # 
@@ -222,7 +221,7 @@ class StabilizedCifarNet(BaseNetwork):
                 test_unperturbed = tf.identity(x_image, name='UnPerturbed')
                 prtrb = tf.random_normal(tf.shape(x_image), stddev=stdv, dtype=tf.float32)
                 test_pert = tf.identity(prtrb, name='Pert')
-                x_prtrb = tf.stop_gradient(tf.add(x_image, prtrb))
+                x_prtrb = tf.add(x_image, prtrb)
                 test_perturbed = tf.identity(x_prtrb, name='Perturbed')
             
             # Conv1 # 
@@ -233,15 +232,15 @@ class StabilizedCifarNet(BaseNetwork):
                 a1 = tf.add(a1, b1)
                 a1 = tf.nn.relu(a1)
             with tf.name_scope('PertConv1') as scope:
-                a1_p = tf.stop_gradient(tf.nn.conv2d(x_prtrb, W1, strides=[1, 1, 1, 1], padding='SAME'))
-                a1_p = tf.stop_gradient(tf.add(a1_p, b1))
-                a1_p = tf.stop_gradient(tf.nn.relu(a1_p))
+                a1_p = tf.nn.conv2d(x_prtrb, W1, strides=[1, 1, 1, 1], padding='SAME')
+                a1_p = tf.add(a1_p, b1)
+                a1_p = tf.nn.relu(a1_p)
                 
             # MaxPool1 #
             with tf.name_scope('UnPertMaxPool1') as scope:
                 a1 = tf.nn.max_pool(a1, ksize=[1, 3, 3, 1], strides=[1, 2, 2, 1], padding='VALID')
             with tf.name_scope('PertMaxPool1') as scope:
-                a1_p = tf.stop_gradient(tf.nn.max_pool(a1_p, ksize=[1, 3, 3, 1], strides=[1, 2, 2, 1], padding='VALID'))
+                a1_p = tf.nn.max_pool(a1_p, ksize=[1, 3, 3, 1], strides=[1, 2, 2, 1], padding='VALID')
             
             # Conv2 # 
             W2 = tf.Variable(tf.truncated_normal([5, 5, 64, 64], stddev=0.05), dtype=tf.float32, name='W2')
@@ -251,15 +250,15 @@ class StabilizedCifarNet(BaseNetwork):
                 a2 = tf.add(a2, b2)
                 a2 = tf.nn.relu(a2)
             with tf.name_scope('PertConv2') as scope:
-                a2_p = tf.stop_gradient(tf.nn.conv2d(a1_p, W2, strides=[1, 1, 1, 1], padding='SAME'))
-                a2_p = tf.stop_gradient(tf.add(a2_p, b2))
-                a2_p = tf.stop_gradient(tf.nn.relu(a2_p))
+                a2_p = tf.nn.conv2d(a1_p, W2, strides=[1, 1, 1, 1], padding='SAME')
+                a2_p = tf.add(a2_p, b2)
+                a2_p = tf.nn.relu(a2_p)
                 
             # MaxPool2 # 
             with tf.name_scope('UnPertMaxPool2') as scope:
                 a2 = tf.nn.max_pool(a2, ksize=[1, 3, 3, 1], strides=[1, 2, 2, 1], padding='VALID')
             with tf.name_scope('PertMaxPool2') as scope:
-                a2_p = tf.stop_gradient(tf.nn.max_pool(a2_p, ksize=[1, 3, 3, 1], strides=[1, 2, 2, 1], padding='VALID'))
+                a2_p = tf.nn.max_pool(a2_p, ksize=[1, 3, 3, 1], strides=[1, 2, 2, 1], padding='VALID')
             
             # Full3 # 
             W3 = tf.Variable(tf.truncated_normal([7*7*64, 384], stddev=0.04), dtype=tf.float32, name='W3')
@@ -270,10 +269,10 @@ class StabilizedCifarNet(BaseNetwork):
                 a3 = tf.nn.relu(a3)
                 a3 = tf.nn.dropout(a3, dropout_prob)
             with tf.name_scope('PertDense3') as scope:
-                a3_p = tf.stop_gradient(tf.reshape(a2_p, [-1, 7*7*64]))
-                a3_p = tf.stop_gradient(tf.add(tf.matmul(a3_p, W3), b3))
-                a3_p = tf.stop_gradient(tf.nn.relu(a3_p))
-                a3_p = tf.stop_gradient(tf.nn.dropout(a3_p, dropout_prob))
+                a3_p = tf.reshape(a2_p, [-1, 7*7*64])
+                a3_p = tf.add(tf.matmul(a3_p, W3), b3)
+                a3_p = tf.nn.relu(a3_p)
+                a3_p = tf.nn.dropout(a3_p, dropout_prob)
             
             # Full4 # 
             W4 = tf.Variable(tf.truncated_normal([384, 192], stddev=0.04), dtype=tf.float32, name='W4')
@@ -283,9 +282,9 @@ class StabilizedCifarNet(BaseNetwork):
                 a4 = tf.nn.relu(a4)
                 a4 = tf.nn.dropout(a4, dropout_prob)
             with tf.name_scope('PertDense4') as scope:
-                a4_p = tf.stop_gradient(tf.add(tf.matmul(a3_p, W4), b4))
-                a4_p = tf.stop_gradient(tf.nn.relu(a4_p))
-                a4_p = tf.stop_gradient(tf.nn.dropout(a4_p, dropout_prob))
+                a4_p = tf.add(tf.matmul(a3_p, W4), b4)
+                a4_p = tf.nn.relu(a4_p)
+                a4_p = tf.nn.dropout(a4_p, dropout_prob)
 
             # Full5 # 
             W5 = tf.Variable(tf.truncated_normal([192, 10], stddev=1/192), dtype=tf.float32, name='W5')
@@ -293,27 +292,28 @@ class StabilizedCifarNet(BaseNetwork):
             with tf.name_scope('UnPertDense5') as scope:
                 a5 = tf.add(tf.matmul(a4, W5), b5, name='UnPerturbed')
             with tf.name_scope('PertDense5') as scope:
-                a5_p = tf.stop_gradient(tf.add(tf.matmul(a4_p, W5), b5, name='Perturbed'))
+                a5_p = tf.add(tf.matmul(a4_p, W5), b5, name='Perturbed')
             
             # Output # 
             with tf.name_scope('Output') as scope:
                 output_image = tf.nn.softmax(a5)
-                output_prtrb = tf.stop_gradient(tf.nn.softmax(a5_p))
+                output_prtrb = tf.nn.softmax(a5_p)
                 self._net_label = tf.placeholder(tf.float32, shape=[None, 10])
                 self._net_output = output_image
 
             # Define Loss # ============================================================================================
             with tf.name_scope('Loss') as scope:
-                cross_entropy = tf.reduce_mean(-tf.reduce_sum(self._net_label * tf.log(self._net_output), 
+                cross_entropy = tf.reduce_mean(-tf.reduce_sum(self._net_label * tf.log(self._net_output+ 1e-10), 
                                                reduction_indices=[1]), name='CrossEntropy')
-                stability_term = tf.stop_gradient(tf.reduce_mean(-tf.reduce_sum(output_image * tf.log(output_prtrb),
-                                                                 reduction_indices=[1])), name='Stability')
+                stability_term = tf.reduce_mean(-tf.reduce_sum(output_image * tf.log(output_prtrb+ 1e-10),
+                                                                 reduction_indices=[1]))
+                stab_id = tf.identity(stability_term, name='Stability')
                 loss = tf.add(cross_entropy, tf.scalar_mul(alpha, stability_term))
                 weights = tf.trainable_variables()
                 weights_decay = tf.scalar_mul(beta,tf.add_n([tf.nn.l2_loss(v) for v in weights]))
-                self._net_loss = tf.add(loss, weights_decay, name='Loss')
+                self._net_loss = tf.add(stability_term, weights_decay, name='Loss')
                 tf.summary.scalar('Loss', self._net_loss)
-                tf.summary.scalar('Stability', stability_term)
+                tf.summary.scalar('Stability', stab_id)
                 
             # Define Accuracy # ========================================================================================
             with tf.name_scope('Accuracy') as scope:
@@ -323,7 +323,7 @@ class StabilizedCifarNet(BaseNetwork):
 
             # Define Optimizer # =======================================================================================
             #self._net_optimize = tf.train.AdadeltaOptimizer(1e-4).minimize(self._net_loss)
-            self._net_optimize = tf.train.GradientDescentOptimizer(learning_rate).minimize(self._net_loss)
+            self._net_optimize = tf.train.GradientDescentOptimizer(learning_rate).minimize(loss)
 
             # Define Train Dict # ======================================================================================
             self._net_train_dict = {dropout_prob:0.5, stdv:0.05, alpha: 0.01, beta:0.004, learning_rate:0.1}

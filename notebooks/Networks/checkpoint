@@ -1,2 +1,2 @@
-model_checkpoint_path: "/notebooks/Sync/RecVis16-Project/notebooks/Networks/StabilityTrained1"
-all_model_checkpoint_paths: "/notebooks/Sync/RecVis16-Project/notebooks/Networks/StabilityTrained1"
+model_checkpoint_path: "/notebooks/Sync/MVAProject-RecVis16/notebooks/Networks/EuclideanStab"
+all_model_checkpoint_paths: "/notebooks/Sync/MVAProject-RecVis16/notebooks/Networks/EuclideanStab"

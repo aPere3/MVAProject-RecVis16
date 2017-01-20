@@ -3,9 +3,6 @@
 
 """
 This module contains base implementation of a NN classifier trained using supervised learning.
-
-Author: Alexandre Péré
-
 """
 
 import tensorflow as tf
@@ -229,7 +226,7 @@ class BaseNetwork(object):
         for iter in range(0, X.shape[0]):
             input_dict = {self._net_input: X[iter:iter+1]}
             input_dict.update(self._net_test_dict)
-            tensor_to_eval = self._net_output.eval(feed_dict=input_dict, session=self._tf_session)
+            tensor_to_eval = self._net_output
             out_arr.append(tensor_to_eval.eval(feed_dict=input_dict, session=self._tf_session))
             
         return numpy.asarray(out_arr)

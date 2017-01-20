@@ -3,9 +3,6 @@
 
 """
 This module contains perturbations generation algorithm.
-
-Author: Alexandre Péré
-
 """
 
 import numpy
